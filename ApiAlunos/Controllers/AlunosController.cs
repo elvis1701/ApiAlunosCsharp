@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ApiAlunos.Context;
 using ApiAlunos.Model;
+using ApiAlunos.Services;
 
 namespace ApiAlunos.Controllers
 {
@@ -14,95 +15,132 @@ namespace ApiAlunos.Controllers
     [ApiController]
     public class AlunosController : ControllerBase
     {
-        private readonly AppDbContext _context;
 
-        public AlunosController(AppDbContext context)
+        private IAlunoService _alunoService;
+
+        public AlunosController(IAlunoService alunoService)
         {
-            _context = context;
+            _alunoService = alunoService;
         }
+
 
         // GET: api/Alunos
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Aluno>>> GetAlunos()
+        public async Task<ActionResult<IAsyncEnumerable<Aluno>>> GetAlunos()
         {
-            return await _context.Alunos.ToListAsync();
-        }
-
-        // GET: api/Alunos/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Aluno>> GetAluno(int id)
-        {
-            var aluno = await _context.Alunos.FindAsync(id);
-
-            if (aluno == null)
-            {
-                return NotFound();
-            }
-
-            return aluno;
-        }
-
-        // PUT: api/Alunos/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutAluno(int id, Aluno aluno)
-        {
-            if (id != aluno.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(aluno).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
+                var alunos = await _alunoService.GetAlunos();
+                return Ok(alunos);
             }
-            catch (DbUpdateConcurrencyException)
+            catch
             {
-                if (!AlunoExists(id))
+
+                return StatusCode(StatusCodes.Status500InternalServerError, "Erro ao obter alunos");
+            }
+
+        }
+
+        [HttpGet("AlunosPorNome")]
+        public async Task<ActionResult<IAsyncEnumerable<Aluno>>>
+                GetAlunosByNome([FromQuery] string nome)
+        {
+            try
+            {
+                var alunos = await _alunoService.GetAlunosByNome(nome);
+                if (alunos.Count() == 0)
+                    return NotFound($"Não existem alunos com o criterio {nome}");
+
+                return Ok(alunos);
+            }
+            catch
+            {
+
+                return BadRequest("Request inválido");
+            }
+
+        }
+
+        [HttpGet("{id:int}", Name = "GetAluno")]
+        public async Task<ActionResult<Aluno>> GetAluno(int id)
+        {
+            try
+            {
+                var aluno = await _alunoService.GetAluno(id);
+                if (aluno == null)
+                    return NotFound($"Não existem alunos com o id = {id}");
+
+                return Ok(aluno);
+            }
+            catch
+            {
+
+                return BadRequest("Request inválido");
+            }
+        }
+
+        [HttpPost]
+        public async Task<ActionResult> Create(Aluno aluno)
+        {
+            try
+            {
+                await _alunoService.CreateAluno(aluno);
+                return CreatedAtRoute(nameof(GetAluno), new { id = aluno.Id }, aluno);
+            }
+            catch
+            {
+
+                return BadRequest("Request inválido");
+            }
+        }
+
+        [HttpPut("{id:int}")]
+        public async Task<ActionResult> Update(int id, [FromBody] Aluno aluno)
+        {
+            try
+            {
+                if(aluno.Id == id)
                 {
-                    return NotFound();
+                    await _alunoService.UpdateAluno(aluno);
+                    return Ok($"Aluno com id = {id} foi atualizado com sucesso");
                 }
                 else
                 {
-                    throw;
+                    return BadRequest("Dados Inconsistentes");
                 }
             }
-
-            return NoContent();
-        }
-
-        // POST: api/Alunos
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Aluno>> PostAluno(Aluno aluno)
-        {
-            _context.Alunos.Add(aluno);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetAluno", new { id = aluno.Id }, aluno);
-        }
-
-        // DELETE: api/Alunos/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteAluno(int id)
-        {
-            var aluno = await _context.Alunos.FindAsync(id);
-            if (aluno == null)
+            catch
             {
-                return NotFound();
+
+                return BadRequest("Request inválido");
             }
-
-            _context.Alunos.Remove(aluno);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
         }
 
-        private bool AlunoExists(int id)
+        [HttpDelete("{id:int}")]
+        public async Task<ActionResult> Delete(int id)
         {
-            return _context.Alunos.Any(e => e.Id == id);
+            try
+            {
+                var aluno = await _alunoService.GetAluno(id);
+                if(aluno != null)
+                {
+                    await _alunoService.DeleteAluno(aluno);
+                    return Ok($"Aluno com o id = {id} foi excluido com sucesso");
+                }
+                else
+                {
+                    return NotFound($"Aluno com o id = {id} não foi encontrado");
+                }
+            }
+            catch
+            {
+
+                return BadRequest("Request inválido");
+            }
         }
+
     }
+
 }
+
+
